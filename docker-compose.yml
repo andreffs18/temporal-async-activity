@@ -1,0 +1,151 @@
+version: "3.5"
+
+services:
+  shell:
+    container_name: shell
+    image: shell
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_ENVIRONMENT: localhost
+      # Temporal Cluster
+      TEMPORAL_CLUSTER_HOST: host.docker.internal:7233
+      TEMPORAL_CLUSTER_NAMESPACE: default
+      # Worker Settings
+      TEMPORAL_WORKER_IDENTITY: my-worker-identity
+      TEMPORAL_WORKER_HTTP_HOST: 0.0.0.0
+      TEMPORAL_WORKER_HTTP_PORT: 1111
+      TEMPORAL_WORKER_HTTP_CALLBACK: http://worker:1111/callback
+      # Async Service
+      HTTP_API_HOST: http://service:2222
+    volumes:
+      - .:/app
+
+  worker:
+    image: shell
+    restart: always
+    depends_on:
+      - temporal
+    environment:
+      # Temporal Cluster
+      TEMPORAL_CLUSTER_HOST: host.docker.internal:7233
+      TEMPORAL_CLUSTER_NAMESPACE: default
+      # Worker Settings
+      TEMPORAL_WORKER_IDENTITY: my-worker-identity
+      TEMPORAL_WORKER_HTTP_HOST: 0.0.0.0
+      TEMPORAL_WORKER_HTTP_PORT: 1111
+      TEMPORAL_WORKER_HTTP_CALLBACK: http://worker:1111/callback
+      # Async Service
+      HTTP_API_HOST: http://service:2222
+      HTTP_API_TIMEOUT: 60
+    ports:
+      - 1111:1111
+    volumes:
+      - .:/app
+    command: ["python3", "-m", "worker"]
+
+  service:
+    image: shell
+    restart: always
+    depends_on:
+      - temporal
+    environment:
+      APP_ENVIRONMENT: localhost
+      # Async Service
+      SERVICE_HTTP_HOST: 0.0.0.0
+      SERVICE_HTTP_PORT: 2222
+    ports:
+      - 2222:2222
+    volumes:
+      - .:/app
+    command: ["python3", "-m", "http_service"]
+
+  temporal:
+    container_name: temporal
+    depends_on:
+      - postgresql
+      - elasticsearch
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=postgresql
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      - ENABLE_ES=true
+      - ES_SEEDS=elasticsearch
+      - ES_VERSION=v7
+    image: temporalio/auto-setup:${TEMPORAL_VERSION}
+    networks:
+      - temporal
+    ports:
+      - 7233:7233
+    volumes:
+      - ./.dynamicconfig:/etc/temporal/config/dynamicconfig
+
+  temporal-admin-tools:
+    container_name: temporal-admin-tools
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CLI_ADDRESS=temporal:7233
+    image: temporalio/admin-tools:${TEMPORAL_VERSION}
+    networks:
+      - temporal
+    stdin_open: true
+    tty: true
+
+  temporal-ui:
+    container_name: temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    image: temporalio/ui:${TEMPORAL_UI_VERSION}
+    networks:
+      - temporal
+    ports:
+      - 8080:8080
+
+  elasticsearch:
+    container_name: temporal-elasticsearch
+    environment:
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=512mb
+      - cluster.routing.allocation.disk.watermark.high=256mb
+      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
+      - xpack.security.enabled=false
+    image: elasticsearch:${ELASTICSEARCH_VERSION}
+    networks:
+      - temporal
+    expose:
+      - 9200:9200
+    volumes:
+      - elastic_search:/var/lib/elasticsearch/data
+
+  postgresql:
+    container_name: temporal-postgresql
+    environment:
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_USER: temporal
+    image: postgres:${POSTGRESQL_VERSION}
+    networks:
+      - temporal
+    expose:
+      - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+networks:
+  temporal:
+    driver: bridge
+    name: temporal
+
+volumes:
+  elastic_search:
+  postgres_data:

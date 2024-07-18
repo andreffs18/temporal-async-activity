@@ -1,0 +1,54 @@
+[tool.poetry]
+name = "temporal"
+version = "0.1.0"
+description = ""
+authors = ["Andre Silva <andreffs18@gmail.com>"]
+readme = "README.md"
+
+[[tool.poetry.source]]
+name = "PyPI"
+priority = "primary"
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.10"
+temporalio = ">=1.5.1,<2.0.0"
+pydantic = ">=1.0.0,<2.0.0"
+# For client command line tool
+click = "^8.1.7"
+# For the httpx request from the activity
+httpx = "^0.27.0"
+# For HTTP server to handle the /request and callback request
+fastapi = "^0.111.1"
+
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.4.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 120
+# Isort config https://github.com/charliermarsh/ruff#how-does-ruffs-import-sorting-compare-to-isort
+lint.select = [
+    # Pyflakes
+    "F",
+    # Pycodestyle
+    "E",
+    "W",
+    # isort
+    "I001"
+]
+
+lint.ignore = []
+lint.unfixable = []
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.lint.pydocstyle]
+convention = "google"
